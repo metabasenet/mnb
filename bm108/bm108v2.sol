@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-//pragma solidity =0.6.6;
 pragma solidity ^0.8.17;
 
 library SafeMath {
@@ -38,8 +37,7 @@ contract BM108 {
     //keccak256('popularize(address addr,uint256 len)');
     bytes32 private constant PERMIT_TYPEHASH = 0xce2c520218dcb5301165798bf7b1c57eb57c6572f887a41cc4bff0ca633df8f5;
 
-    address public MNT = 0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA;
-    //address public MNT = 0xEcC22434CcEFE26EFBf8a14578aF58b08930f28f;
+    address public MNT = 0x9c234f90F400dD16D45702f47EedcF7DBAF26904;
 
     address public owner;
 
@@ -51,8 +49,8 @@ contract BM108 {
     string public constant symbol = 'BM';
     uint8 public constant decimals = 0;
     
-    event Popularize(address indexed parent, address indexed children,uint timestamp);
-    event Transfer(address indexed to, uint indexed t, uint bnb);
+    event Popularize(address indexed to, uint indexed t, uint value);
+    event Transfer(address indexed from, address indexed to, uint value);
 
     struct Info {
         address parent;
@@ -76,7 +74,7 @@ contract BM108 {
 
     uint private constant popularizeBNB = 1.08 ether;
 
-    constructor() public
+    constructor() 
     {
         uint chainId;
         assembly {
@@ -100,7 +98,7 @@ contract BM108 {
             child : new address[](0)});
         owner = msg.sender;
         begin = block.number;
-        emit Popularize(address(this),msg.sender,block.timestamp);
+        emit Transfer(address(this),msg.sender,block.timestamp);
     }
 
     //
@@ -166,7 +164,7 @@ contract BM108 {
             count : 0,
             child : new address[](0)});
         spreads[parent].child.push(addr);
-        emit Popularize(parent,addr,block.timestamp);
+        emit Transfer(parent,addr,block.timestamp);
         ret = true;
     }
 
@@ -281,12 +279,12 @@ contract BM108 {
         uint v008_1 = v008 * 375 / 1000;
         //payable(owner).transfer(v008_1);
         transferBNB(owner,v008_1,is_owner);
-        emit Transfer(owner, 0, v008_1);
+        emit Popularize(owner, 0, v008_1);
         
         uint v008_2 = v008 * 625 / 1000;
         //payable(ProjC).transfer(v008_2);
         transferBNB(ProjC,v008_2,is_owner);
-        emit Transfer(ProjC, 1, v008_2);
+        emit Popularize(ProjC, 1, v008_2);
 
         if (is_owner == false) {
             transferMNT(msg.sender, 2 ether);
@@ -294,7 +292,7 @@ contract BM108 {
 
         //payable(addr).transfer(popularizeBNB * 30 / 108);
         transferBNB(addr,popularizeBNB * 30 / 108,is_owner);
-        emit Transfer(addr, 10, popularizeBNB * 30 / 108);
+        emit Popularize(addr, 10, popularizeBNB * 30 / 108);
 
         address addr_temp = spreads[addr].parent;
         uint add2 = 0;
@@ -307,7 +305,7 @@ contract BM108 {
             }
             //payable(addr_temp).transfer(v2);
             transferBNB(addr_temp,v2,is_owner);
-            emit Transfer(addr_temp, 20 + l, v2);
+            emit Popularize(addr_temp, 20 + l, v2);
             add2 += v2;
             addr_temp = spreads[addr_temp].parent;
         }
@@ -322,14 +320,14 @@ contract BM108 {
                     add3 = (popularizeBNB * 10 / 108);
                     //payable(addr_temp).transfer(add3);
                     transferBNB(addr_temp,add3,is_owner);
-                    emit Transfer(addr_temp,310,add3);
+                    emit Popularize(addr_temp,310,add3);
                 }
             } else if (spreads[addr_temp].v == 2) {
                 uint v = (popularizeBNB * 15 / 108);
                 if (add3 < v) {
                     //payable(addr_temp).transfer(v - add3);
                     transferBNB(addr_temp,v - add3,is_owner);
-                    emit Transfer(addr_temp,320,v - add3);
+                    emit Popularize(addr_temp,320,v - add3);
                     add3 = v;
                 }
             } else if (spreads[addr_temp].v == 3) {
@@ -337,7 +335,7 @@ contract BM108 {
                 if (add3 < v) {
                     //payable(addr_temp).transfer(v - add3);
                     transferBNB(addr_temp,v - add3,is_owner);
-                    emit Transfer(addr_temp,330, v - add3);
+                    emit Popularize(addr_temp,330, v - add3);
                     add3 = v;
                 }
             } else if (spreads[addr_temp].v == 4) {
@@ -345,26 +343,26 @@ contract BM108 {
                 if (add3 < v) {
                     //payable(addr_temp).transfer(v - add3);
                     transferBNB(addr_temp,v - add3,is_owner);
-                    emit Transfer(addr_temp,340, v - add3);
+                    emit Popularize(addr_temp,340, v - add3);
                     add3 = v;
                 } else if (add3 == v && v4_e == 0) {
                     v4_e = 1;
                     //payable(addr_temp).transfer(v / 10);
                     transferBNB(addr_temp,v / 10,is_owner);
-                    emit Transfer(addr_temp,345, v / 10);
+                    emit Popularize(addr_temp,345, v / 10);
                 }
             } else if (spreads[addr_temp].v == 5) {
                 uint v = popularizeBNB * 30 / 108;
                 if (add3 < v) {
                     //payable(addr_temp).transfer(v - add3);
                     transferBNB(addr_temp,v - add3,is_owner);
-                    emit Transfer(addr_temp,350, v - add3);
+                    emit Popularize(addr_temp,350, v - add3);
                     add3 = v;
                 } else if (add3 == v && v5_e == 0) {
                     v5_e = 1;
                     //payable(addr_temp).transfer(v / 10);
                     transferBNB(addr_temp,v / 10,is_owner);
-                    emit Transfer(addr_temp,355, v / 10);
+                    emit Popularize(addr_temp,355, v / 10);
                     break;
                 }
             }
@@ -377,7 +375,7 @@ contract BM108 {
         if (A_add > 0) {
             //payable(ProjA).transfer(A_add);
             transferBNB(ProjA,A_add,is_owner);
-            emit Transfer(ProjA, 40, A_add);
+            emit Popularize(ProjA, 40, A_add);
         }
         ret = true;
         // add1 30
@@ -393,12 +391,12 @@ contract BM108 {
             uint v4_1 = popularizeBNB * 200 / 108;
             //payable(addrs[index]).transfer(v4_1);
             transferBNB(addrs[index],v4_1,is_owner);
-            emit Transfer(addrs[index], 41, v4_1);
+            emit Popularize(addrs[index], 41, v4_1);
 
             uint v4_2 = popularizeBNB * 10 / 108;
             //payable(owner).transfer(v4_2);
             transferBNB(owner,v4_2,is_owner);
-            emit Transfer(owner, 42, v4_2);
+            emit Popularize(owner, 42, v4_2);
         }
         
         if (addrs.length % 100 == 0) {
@@ -427,34 +425,34 @@ contract BM108 {
                     if (spreads[v5addrs[i]].v5_c == 0 || spreads[v5addrs[i]].v5_c == 1) {
                         //payable(v5addrs[i]).transfer(v_5_1);
                         transferBNB(v5addrs[i],v_5_1,is_owner);
-                        emit Transfer(v5addrs[i], 51, v_5_1);
+                        emit Popularize(v5addrs[i], 51, v_5_1);
                     } else if (spreads[v5addrs[i]].v5_c == 2) {
                         uint val = v_5_1 + v_5_2;
                         //payable(v5addrs[i]).transfer(val);
                         transferBNB(v5addrs[i],val,is_owner);
-                        emit Transfer(v5addrs[i], 52, val);
+                        emit Popularize(v5addrs[i], 52, val);
                     } else if (spreads[v5addrs[i]].v5_c == 3) {
                         uint val = v_5_1 + v_5_2 + v_5_3;
                         //payable(v5addrs[i]).transfer(val);
                         transferBNB(v5addrs[i],val,is_owner);
-                        emit Transfer(v5addrs[i], 53, val);
+                        emit Popularize(v5addrs[i], 53, val);
                     } else if (spreads[v5addrs[i]].v5_c == 4) {
                         uint val = v_5_1 + v_5_2 + v_5_3 + v_5_4;
                         //payable(v5addrs[i]).transfer(val);
                         transferBNB(v5addrs[i],val,is_owner);
-                        emit Transfer(v5addrs[i], 54, val);
+                        emit Popularize(v5addrs[i], 54, val);
                     }
                 }
                 if (ProjB_val > 0) {
                     //payable(ProjB).transfer(ProjB_val);
                     transferBNB(ProjB,ProjB_val,is_owner);
-                    emit Transfer(ProjB, 55, ProjB_val);    
+                    emit Popularize(ProjB, 55, ProjB_val);    
                 }
             } else {
                 uint ProjB_val = 100 * (popularizeBNB * 25 / 1080);
                 //payable(ProjB).transfer(ProjB_val);
                 transferBNB(ProjB,ProjB_val,is_owner);
-                emit Transfer(ProjB, 55, ProjB_val);
+                emit Popularize(ProjB, 55, ProjB_val);
             }
         }
         ret = true;
@@ -494,10 +492,10 @@ contract BM108 {
     }
 
     
-    function withdraw(uint wad,uint mnt) external payable {
+    function withdraw(uint bnb,uint mnt) external payable {
         assert(msg.sender == owner);
-        payable(owner).transfer(wad);
-        transferMNT(owner,mnt);
+        payable(owner).transfer(bnb);
+        IMNT(MNT).transfer(owner, mnt);
     }
 
     function setMNT(address addr) external {
