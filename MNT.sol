@@ -51,7 +51,7 @@ library SafeMath {
     // decimals = 18;
     // (10**decimals) ** 0.125
     function vote2power(uint y) internal pure returns (uint z) {
-        if (y >= 1679616 ether) {
+        if (y >= 6**8 * 1 ether) {
             z = z * 6 / 100;
         } else {
             z = y * sqrt3(y) / 17782794100;
@@ -112,7 +112,9 @@ contract MNT {
     }
 
     constructor() {
+        // bsc main
         pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
+        
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
         begin = block.number;
@@ -124,7 +126,6 @@ contract MNT {
             vote_power : 0,
             real_power : 0,
             lock_number : 0,
-            is_stop : false,
             child : new address[](0)});
     }
 
@@ -145,7 +146,12 @@ contract MNT {
         emit Approval(owner, spender, value);
     }
 
-    function _transfer(address from, address to, uint value) private {
+    function _transfer(address from, address to, uint value) private {       
+        /* 
+        if (block.number < (begin + cycle_period * 6) && from == pair) {
+            address p = spreads[to].parent;
+            assert(p != address(this) && spreads[p].parent != address(this));
+        }*/
         balances[from] = balances[from].sub(value);
         balances[to] = balances[to].add(value);
         emit Transfer(from, to, value);
@@ -198,13 +204,16 @@ contract MNT {
     //
     uint public constant height_profit = 0.1 ether;
     
+    // bsc main
     address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
 
+    uint public constant cycle_period = 30 * 24 * 60 * 20; 
+    uint public constant cycle_profit = 30 * 24 * 60 * 20 * (0.1 ether);
+    
     address public pair;
 
     function addLiquidity(uint amount) external returns (uint usdt_amount, uint liquidity) { 
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         (uint reserveA, uint reserveB,) = IUniswap(pair).getReserves();
         usdt_amount = address(this) < USDT ? amount.mul(reserveB) / reserveA : amount.mul(reserveA) / reserveB;
         _transfer(msg.sender, pair, amount);
@@ -216,8 +225,7 @@ contract MNT {
     }
 
     function removeLiquidity(uint liquidity) external returns (uint amountMNB, uint amountUSDT) {
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         IUniswap(pair).transferFrom(msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = IUniswap(pair).burn(msg.sender);
         (amountMNB, amountUSDT) = address(this) < USDT ? (amount0, amount1) : (amount1, amount0);
@@ -230,8 +238,7 @@ contract MNT {
     }
 
     function impeach(address addr) external {
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         updateLP();
         uint lp = lps[addr].lp;
         uint pair_lp = IUniswap(pair).balanceOf(addr);
@@ -243,12 +250,6 @@ contract MNT {
         } else {
             revert();
         }
-    }
-
-    function stop() external {
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
-        spreads[msg.sender].is_stop = true;
     }
 
     function updateLP() private {
@@ -307,7 +308,6 @@ contract MNT {
         uint256 real_power;
         // Voting lock number
         uint256 lock_number;
-        bool is_stop;
     }
 
     mapping(address => Info) public spreads;
@@ -318,8 +318,12 @@ contract Mining is MNT
 {
     using SafeMath for uint;
     bytes32 private DOMAIN_SEPARATOR;
+
     //keccak256("popularize(address addr)");
     bytes32 private constant PERMIT_TYPEHASH = 0x21cf163f92d861d4d1aca6cf2580b603353711f20e52675c104cd16e528edf30;
+
+    //keccak256("setChild(address addr_old,address addr_new)");
+    bytes32 private constant PERMIT_TYPEHASH_SETCHILD = 0x9d76e746d4f1502d91350b8de3086a0a837140a295a5bc95668fa2a961dca549;
 
     struct power_profit {
         uint power;
@@ -329,12 +333,6 @@ contract Mining is MNT
     uint public whole_power = 0;
     mapping(uint => power_profit) public power_profit_whole;
     uint public cycle = 1;
-
-   
-    // production
-    uint public constant cycle_period = 30 * 24 * 60 * 20;
-    // 
-    uint public constant cycle_profit = 30 * 24 * 60 * 20 * (0.1 ether);
   
     event Popularize(address indexed parent, address indexed children,uint indexed cycle,uint timestamp);
     event VoteIn(address indexed addr,uint indexed cycle,uint timestamp,uint value);
@@ -343,7 +341,7 @@ contract Mining is MNT
     /**
      * @dev constructor
      */
-    constructor() { 
+    constructor() {
         uint chainId;
         assembly {
             chainId := chainid()
@@ -395,8 +393,7 @@ contract Mining is MNT
      */
     function popularize(address addr) private returns (bool ret)
     {
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+      require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(spreads[addr].parent == address(0), "Address has been promoted");
         require(spreads[msg.sender].child.length < 36,"Promotion data cannot be greater than 36");
         spreads[addr] = Info({
@@ -406,7 +403,6 @@ contract Mining is MNT
             vote_power : 0,
             real_power : 0,
             lock_number : 0,
-            is_stop : false,
             child : new address[](0)});
         spreads[msg.sender].child.push(addr);
         spreads_length++;
@@ -414,15 +410,43 @@ contract Mining is MNT
         ret = true;
     }
 
+    function setChild(address addr_old,address addr_new,uint8 v, bytes32 r, bytes32 s) external {
+        assert(spreads[addr_old].parent == msg.sender && spreads[addr_new].parent == address(0));
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                '\x19\x01',
+                DOMAIN_SEPARATOR,
+                keccak256(abi.encode(PERMIT_TYPEHASH_SETCHILD,addr_old,addr_new))
+            )
+        );
+        require(addr_old == ecrecover(digest, v, r, s),"signature data error");
+        spreads[addr_new] = Info({
+            parent : spreads[addr_old].parent,
+            cycle : spreads[addr_old].cycle,
+            vote : spreads[addr_old].vote,
+            vote_power : spreads[addr_old].vote_power,
+            real_power : spreads[addr_old].real_power,
+            lock_number : spreads[addr_old].lock_number,
+            child : spreads[addr_old].child});
+        for (uint i = 0; i < spreads[msg.sender].child.length; i++) {
+            if (spreads[msg.sender].child[i] == addr_old) {
+                spreads[msg.sender].child[i] = addr_new;
+            }    
+        }
+        for (uint i = 0; i < spreads[addr_old].child.length; i++) {
+            spreads[spreads[addr_old].child[i]].parent = addr_new;
+        }
+        delete spreads[addr_old];
+    }
+
+
     /**
      * @dev voteIn
      */
     function voteIn(uint256 value) external returns (uint ret)
     {
         //_update();
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
-
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         //require(balanceOf[msg.sender] >= value,"The investment amount is too large");
         if (value >= balanceVote[msg.sender]) {
             balances[msg.sender] = balances[msg.sender].sub(value.sub(balanceVote[msg.sender]));
@@ -446,8 +470,7 @@ contract Mining is MNT
     function voteOut(uint256 value) external returns (uint ret)
     {
         //_update();
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(block.number.sub(spreads[msg.sender].lock_number) > cycle_period.mul(2), "Non redeemable during the lock up period");
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
@@ -461,8 +484,7 @@ contract Mining is MNT
      */
     function voteMining() external returns (uint mint,uint f)
     {
-        require(spreads[msg.sender].parent != address(0) && spreads[msg.sender].is_stop == false, 
-            "Parent address is not a generalization set or is stop");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         return _voteMining(msg.sender);
     }
 
@@ -479,9 +501,7 @@ contract Mining is MNT
         address addr_temp = addr;
         while (spreads[addr_temp].parent != address(this)) {
             addr_temp = spreads[addr_temp].parent;
-            if (spreads[addr_temp].is_stop == false) {
-                l++;
-            }
+            l++;
         }
         powers = new uint[](l);
         addrs = new address[](l);
@@ -489,13 +509,11 @@ contract Mining is MNT
         addr_temp = addr;
         while (spreads[addr_temp].parent != address(this)) {
             addr_temp = spreads[addr_temp].parent;
-            if (spreads[addr_temp].is_stop == false) {
-                addrs[l] = addr_temp;
-                uint pow = spreads[addr_temp].vote_power;
-                powers[l] = pow;
-                power_sum = power_sum.add(pow);
-                l++;
-            }
+            addrs[l] = addr_temp;
+            uint pow = spreads[addr_temp].vote_power;
+            powers[l] = pow;
+            power_sum = power_sum.add(pow);
+            l++;
         }
     }
 
