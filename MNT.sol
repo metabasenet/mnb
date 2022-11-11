@@ -93,7 +93,7 @@ contract MNT {
     mapping(address => uint) public balanceVote;
 
     function balanceOf(address owner) external view returns(uint) {
-        return balances[owner].add(balanceVote[owner]);
+        return balances[owner].add(balanceVote[owner]).add(spreads[owner].vote);
     }
 
     mapping(address => mapping(address => uint)) public allowance;
@@ -117,7 +117,8 @@ contract MNT {
         
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
-        begin = block.number;
+        
+        //begin = block.number;
         spreads_length = 1;
         spreads[msg.sender] = Info({
             parent : address(this),
@@ -198,7 +199,8 @@ contract MNT {
     //
     mapping(address => LP) public lps;
 
-    uint public begin;
+    // Oct-31-2022 07:31:20 PM +UTC
+    uint public constant begin = 22660000;
     // 
     uint public height = 0;
     //
@@ -207,7 +209,7 @@ contract MNT {
     // bsc main
     address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
 
-    uint public constant cycle_period = 30 * 24 * 60 * 20; 
+    uint public constant cycle_period = 30 * 24 * 60 * 20;
     uint public constant cycle_profit = 30 * 24 * 60 * 20 * (0.1 ether);
     
     address public pair;
