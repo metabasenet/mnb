@@ -81,11 +81,11 @@ interface IUniswap {
     function burn(address to) external returns (uint amount0, uint amount1);
 }
 
-contract MNT {
+contract MNB {
     using SafeMath for uint;
 
-    string public constant name = 'Metabase Network Token';
-    string public constant symbol = 'MNT';
+    string public constant name = 'Metabase Network on BSC';
+    string public constant symbol = 'MNB';
     uint8 public constant decimals = 18;
     uint  public totalSupply;
 
@@ -316,7 +316,7 @@ contract MNT {
     uint public spreads_length;
 }
 
-contract Mining is MNT
+contract Mining is MNB
 {
     using SafeMath for uint;
     bytes32 private DOMAIN_SEPARATOR;
