@@ -112,13 +112,14 @@ contract MNT {
     }
 
     constructor() {
-        // bsc main
-        pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
+        
+        // bsc test
+        pair = pairFor(0xB7926C0430Afb07AA7DEfDE6DA862aE0Bde767bc,hex'ecba335299a6693cb2ebc4782e74669b84290b6378ea3a3873c7231a8d7d1074');
         
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
         
-        //begin = block.number;
+        begin = block.number;
         spreads_length = 1;
         spreads[msg.sender] = Info({
             parent : address(this),
@@ -148,11 +149,6 @@ contract MNT {
     }
 
     function _transfer(address from, address to, uint value) private {       
-        /* 
-        if (block.number < (begin + cycle_period * 6) && from == pair) {
-            address p = spreads[to].parent;
-            assert(p != address(this) && spreads[p].parent != address(this));
-        }*/
         balances[from] = balances[from].sub(value);
         balances[to] = balances[to].add(value);
         emit Transfer(from, to, value);
@@ -200,17 +196,17 @@ contract MNT {
     mapping(address => LP) public lps;
 
     // Oct-31-2022 07:31:20 PM +UTC
-    uint public constant begin = 22660000;
+    uint public begin;
     // 
     uint public height = 0;
     //
     uint public constant height_profit = 0.1 ether;
     
-    // bsc main
-    address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
+    // bsc test 
+    address public constant USDT = 0x89EB90e7E9480Ff2F39Dd60AA2c4FD6FD80472A3;
 
-    uint public constant cycle_period = 30 * 24 * 60 * 20;
-    uint public constant cycle_profit = 30 * 24 * 60 * 20 * (0.1 ether);
+    uint public constant cycle_period = 60 * 20;
+    uint public constant cycle_profit = 60 * 20 * (0.1 ether);
     
     address public pair;
 
