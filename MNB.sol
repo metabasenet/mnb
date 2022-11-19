@@ -91,6 +91,7 @@ contract MNB {
 
     mapping(address => uint) public balances;
     mapping(address => uint) public balanceVote;
+    mapping(address => uint) public voteLock;
 
     function balanceOf(address owner) external view returns(uint) {
         return balances[owner].add(balanceVote[owner]).add(spreads[owner].vote);
@@ -118,7 +119,7 @@ contract MNB {
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
         
-        //begin = block.number;
+        begin = block.number;
         spreads_length = 1;
         spreads[msg.sender] = Info({
             parent : address(this),
@@ -148,11 +149,7 @@ contract MNB {
     }
 
     function _transfer(address from, address to, uint value) private {       
-        /* 
-        if (block.number < (begin + cycle_period * 6) && from == pair) {
-            address p = spreads[to].parent;
-            assert(p != address(this) && spreads[p].parent != address(this));
-        }*/
+        
         balances[from] = balances[from].sub(value);
         balances[to] = balances[to].add(value);
         emit Transfer(from, to, value);
@@ -170,9 +167,10 @@ contract MNB {
 
     function transferVote(address to, uint value) external returns (bool) {
         balances[msg.sender] = balances[msg.sender].sub(value);
-        //balanceOf[to] = balanceOf[to].add(value);
-        //balanceOf[to] = balanceOf[to].sub(value);
         balanceVote[to] = balanceVote[to].add(value);
+        if (cycle == 1) {
+            voteLock[to] = 1;
+        }
         emit Transfer(msg.sender, to, value);
         return true;
     }
@@ -199,19 +197,19 @@ contract MNB {
     //
     mapping(address => LP) public lps;
 
-    // Oct-31-2022 07:31:20 PM +UTC
-    uint public constant begin = 22660000;
+    uint public begin;
     // 
     uint public height = 0;
     //
-    uint public constant height_profit = 0.1 ether;
+    uint public constant height_profit = 0.05 ether;
     
     // bsc main
     address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
 
-    uint public constant cycle_period = 30 * 24 * 60 * 20;
-    uint public constant cycle_profit = 30 * 24 * 60 * 20 * (0.1 ether);
-    
+    uint public constant cycle_period = 15 * 24 * 60 * 20;
+    uint public constant cycle_profit = 15 * 24 * 60 * 20 * (0.05 ether);
+    uint public cycle = 1;
+
     address public pair;
 
     function addLiquidity(uint amount) external returns (uint usdt_amount, uint liquidity) { 
@@ -334,7 +332,6 @@ contract Mining is MNB
     
     uint public whole_power = 0;
     mapping(uint => power_profit) public power_profit_whole;
-    uint public cycle = 1;
   
     event Popularize(address indexed parent, address indexed children,uint indexed cycle,uint timestamp);
     event VoteIn(address indexed addr,uint indexed cycle,uint timestamp,uint value);
@@ -474,6 +471,7 @@ contract Mining is MNB
         //_update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(block.number.sub(spreads[msg.sender].lock_number) > cycle_period.mul(2), "Non redeemable during the lock up period");
+        require(cycle > 24 || voteLock[msg.sender] == 0, "Air drop in the first cycle, unable to withdraw");
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
         balances[msg.sender] = balances[msg.sender].add(value);
