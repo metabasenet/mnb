@@ -226,25 +226,31 @@ contract MNB {
 
     function removeLiquidity(uint liquidity) external returns (uint amountMNB, uint amountUSDT) {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
+        uint lp = lps[msg.sender].lp;
+        uint pair_lp = IUniswap(pair).balanceOf(msg.sender);
+        require(lp <= pair_lp,"lp data err");
+
         IUniswap(pair).transferFrom(msg.sender, pair, liquidity);
         (uint amount0, uint amount1) = IUniswap(pair).burn(msg.sender);
         (amountMNB, amountUSDT) = address(this) < USDT ? (amount0, amount1) : (amount1, amount0);
     
         updateLP();
-        uint lp = lps[msg.sender].lp;
+        //uint lp = lps[msg.sender].lp;
         assert(liquidity <= lp);
         lps[msg.sender].lp = lp.sub(liquidity);
         Del(msg.sender,lps[msg.sender].quantity.mul(liquidity) / lp);
     }
 
-    function impeach(address addr) external {
+    function impeach(address addr,uint liquidity) external {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         updateLP();
         uint lp = lps[addr].lp;
         uint pair_lp = IUniswap(pair).balanceOf(addr);
         
         if (lp > pair_lp) {
-            uint liquidity = lp.sub(pair_lp);
+            if (liquidity > lp.sub(pair_lp)) {
+                liquidity = lp.sub(pair_lp);
+            }
             lps[addr].lp = lp.sub(liquidity);
             Del(addr,lps[addr].quantity.mul(liquidity) / lp);
         } else {
@@ -531,18 +537,22 @@ contract Mining is MNB
             uint old_power = power_profit_whole[old_cycle].power;
             if (old_power > 0) {
                 uint v = old_profit.mul(spreads[addr].real_power) / old_power;
-                (address[] memory addrs, uint[] memory powers,uint power_sum) = parents(addr);
-                uint p = v.mul(2) / 10;
-                if (power_sum > 0) {
-                    for (uint i = 0; i < addrs.length; i++) {
-                        // 256 MNT 5.12pow 
-                        if (powers[i] >= 5.12 ether) {
-                            uint ret = p.mul(powers[i]) / power_sum;
-                            _mint(addrs[i], ret);
+                if (cycle > 120) {
+                    _mint(addr,v);
+                } else {
+                    (address[] memory addrs, uint[] memory powers,uint power_sum) = parents(addr);
+                    uint p = v.mul(2) / 10;
+                    if (power_sum > 0) {
+                        for (uint i = 0; i < addrs.length; i++) {
+                            // 256 MNT 5.12pow 
+                            if (powers[i] >= 5.12 ether) {
+                                uint ret = p.mul(powers[i]) / power_sum;
+                                _mint(addrs[i], ret);
+                            }
                         }
                     }
+                    _mint(addr,v.sub(p));
                 }
-                _mint(addr,v.sub(p));
                 mint = v;
             }
             spreads[addr].real_power = 0;
