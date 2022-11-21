@@ -188,6 +188,7 @@ contract MNB {
         uint lp;
         uint quantity;
         uint weight;
+        uint lock_number;
     }
 
     // 
@@ -218,29 +219,28 @@ contract MNB {
         usdt_amount = address(this) < USDT ? amount.mul(reserveB) / reserveA : amount.mul(reserveA) / reserveB;
         _transfer(msg.sender, pair, amount);
         IUniswap(USDT).transferFrom(msg.sender, pair, usdt_amount);
-        liquidity = IUniswap(pair).mint(msg.sender);
+        liquidity = IUniswap(pair).mint(address(this));
         updateLP();
         lps[msg.sender].lp = lps[msg.sender].lp.add(liquidity);
+        lps[msg.sender].lock_number = block.number;
         Add(msg.sender,amount);
     }
 
     function removeLiquidity(uint liquidity) external returns (uint amountMNB, uint amountUSDT) {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
+        require(block.number > (lps[msg.sender].lock_number + cycle_period),"The unlocking date has not yet arrived");
         uint lp = lps[msg.sender].lp;
-        uint pair_lp = IUniswap(pair).balanceOf(msg.sender);
-        require(lp <= pair_lp,"lp data err");
-
-        IUniswap(pair).transferFrom(msg.sender, pair, liquidity);
+        require(liquidity <= lp,"Too many withdrawals");
+        IUniswap(pair).transfer(pair, liquidity);
         (uint amount0, uint amount1) = IUniswap(pair).burn(msg.sender);
         (amountMNB, amountUSDT) = address(this) < USDT ? (amount0, amount1) : (amount1, amount0);
     
         updateLP();
-        //uint lp = lps[msg.sender].lp;
-        assert(liquidity <= lp);
         lps[msg.sender].lp = lp.sub(liquidity);
         Del(msg.sender,lps[msg.sender].quantity.mul(liquidity) / lp);
     }
-
+    
+    /*
     function impeach(address addr,uint liquidity) external {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         updateLP();
@@ -256,7 +256,7 @@ contract MNB {
         } else {
             revert();
         }
-    }
+    }*/
 
     function updateLP() private {
         if (whole_weight > 0) {
@@ -476,7 +476,7 @@ contract Mining is MNB
     {
         //_update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        require(block.number.sub(spreads[msg.sender].lock_number) > cycle_period.mul(2), "Non redeemable during the lock up period");
+        require(block.number.sub(spreads[msg.sender].lock_number) > cycle_period, "Non redeemable during the lock up period");
         require(cycle > 24 || voteLock[msg.sender] == 0, "Air drop in the first cycle, unable to withdraw");
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
