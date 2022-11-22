@@ -468,6 +468,10 @@ contract Mining is MNB
             spreads[spreads[addr_old].child[i]].parent = addr_new;
         }
         delete spreads[addr_old];
+        
+        assert(airdrops[addr_new].cycle == 0 && airdrops[addr_new].vote == 0);
+        airdrops[addr_new].cycle = airdrops[addr_old].cycle;
+        airdrops[addr_old].cycle = 0;
     }
 
 
