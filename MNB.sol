@@ -90,11 +90,15 @@ contract MNB {
     uint  public totalSupply;
 
     mapping(address => uint) public balances;
-    mapping(address => uint) public balanceVote;
-    mapping(address => uint) public voteLock;
+    mapping(address => Airdrop) public airdrops;
 
-    function balanceOf(address owner) external view returns(uint) {
-        return balances[owner].add(balanceVote[owner]).add(spreads[owner].vote);
+    function balanceOf(address owner) external view returns(uint ret) {
+        ret = balances[owner];
+        if (spreads[owner].parent == address(0)) {
+            ret = ret.add(airdrops[owner].vote); 
+        } else {
+            ret = ret.add(spreads[owner].vote);
+        }
     }
 
     mapping(address => mapping(address => uint)) public allowance;
@@ -167,14 +171,15 @@ contract MNB {
 
     function transferVote(address to, uint value) external returns (bool) {
         balances[msg.sender] = balances[msg.sender].sub(value);
-        balanceVote[to] = balanceVote[to].add(value);
-        if (cycle == 1) {
-            voteLock[to] = 1;
+        if (spreads[to].parent == address(0)) {
+            airdrops[to].vote = airdrops[to].vote.add(value);
+        } else {
+            spreads[to].vote = spreads[to].vote.add(value);
+            spreads[to].vote_power = SafeMath.vote2power(spreads[to].vote);
         }
         emit Transfer(msg.sender, to, value);
         return true;
     }
-
 
     function transferFrom(address from, address to, uint value) external returns (bool) {
         if (allowance[from][msg.sender] < (2**256 - 1)) {
@@ -191,6 +196,10 @@ contract MNB {
         uint lock_number;
     }
 
+    struct Airdrop {
+        uint cycle;
+        uint vote;
+    }
     // 
     uint public whole_weight = 0;
     // 
@@ -228,7 +237,7 @@ contract MNB {
 
     function removeLiquidity(uint liquidity) external returns (uint amountMNB, uint amountUSDT) {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        require(block.number > (lps[msg.sender].lock_number + cycle_period),"The unlocking date has not yet arrived");
+        require(block.number > (lps[msg.sender].lock_number + cycle_period * 2),"The unlocking date has not yet arrived");
         uint lp = lps[msg.sender].lp;
         require(liquidity <= lp,"Too many withdrawals");
         IUniswap(pair).transfer(pair, liquidity);
@@ -239,24 +248,6 @@ contract MNB {
         lps[msg.sender].lp = lp.sub(liquidity);
         Del(msg.sender,lps[msg.sender].quantity.mul(liquidity) / lp);
     }
-    
-    /*
-    function impeach(address addr,uint liquidity) external {
-        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        updateLP();
-        uint lp = lps[addr].lp;
-        uint pair_lp = IUniswap(pair).balanceOf(addr);
-        
-        if (lp > pair_lp) {
-            if (liquidity > lp.sub(pair_lp)) {
-                liquidity = lp.sub(pair_lp);
-            }
-            lps[addr].lp = lp.sub(liquidity);
-            Del(addr,lps[addr].quantity.mul(liquidity) / lp);
-        } else {
-            revert();
-        }
-    }*/
 
     function updateLP() private {
         if (whole_weight > 0) {
@@ -328,6 +319,9 @@ contract Mining is MNB
     //keccak256("popularize(address addr)");
     bytes32 private constant PERMIT_TYPEHASH = 0x21cf163f92d861d4d1aca6cf2580b603353711f20e52675c104cd16e528edf30;
 
+    //keccak256("popularizeAirdrop(address addr,uint256 c)");
+    bytes32 private constant PERMIT_TYPEHASH_AIRDROP = 0x07cb6c4d54dd6b1d9a2acfac4210005c922e9876a749cdaf6309d8fe93c1cbdd;
+
     //keccak256("setChild(address addr_old,address addr_new)");
     bytes32 private constant PERMIT_TYPEHASH_SETCHILD = 0x9d76e746d4f1502d91350b8de3086a0a837140a295a5bc95668fa2a961dca549;
 
@@ -377,7 +371,32 @@ contract Mining is MNB
         );
         require(addr == ecrecover(digest, addr_v, addr_r, addr_s),"signature data1 error");
         require(temp == ecrecover(keccak256(abi.encodePacked(msg.sender)),temp_v, temp_r, temp_s),"signature data2 error");
+        uint vote = airdrops[addr].vote;
+        if (vote > 0) {
+            totalSupply = totalSupply.sub(vote);
+            emit Transfer(addr,address(0),vote);
+            airdrops[addr].vote = 0;
+        }
         return popularize(addr);
+    }
+
+    function popularizeAirdrop(address addr,uint c, address temp,
+        uint8 addr_v, bytes32 addr_r, bytes32 addr_s,
+        uint8 temp_v, bytes32 temp_r, bytes32 temp_s)
+        external returns (bool ret)
+    {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                '\x19\x01',
+                PERMIT_TYPEHASH_AIRDROP,
+                keccak256(abi.encode(PERMIT_TYPEHASH, temp))
+            )
+        );
+        require(addr == ecrecover(digest, addr_v, addr_r, addr_s),"signature data1 error");
+        require(temp == ecrecover(keccak256(abi.encodePacked(msg.sender)),temp_v, temp_r, temp_s),"signature data2 error");
+        popularize(addr);
+        airdrops[addr].cycle = cycle + c;
+        return true;
     }
 
     function popularize(address addr,uint8 v, bytes32 r, bytes32 s) external returns (bool ret)
@@ -390,6 +409,12 @@ contract Mining is MNB
             )
         );
         require(addr == ecrecover(digest, v, r, s),"signature data error");
+        uint vote = airdrops[addr].vote;
+        if (vote > 0) {
+            totalSupply = totalSupply.sub(vote);
+            emit Transfer(addr,address(0),vote);
+            airdrops[addr].vote = 0;
+        }
         return popularize(addr);
     }
 
@@ -404,11 +429,12 @@ contract Mining is MNB
         spreads[addr] = Info({
             parent : msg.sender,
             cycle : cycle,
-            vote : 0,
-            vote_power : 0,
+            vote : airdrops[addr].vote,
+            vote_power : SafeMath.vote2power(airdrops[addr].vote),
             real_power : 0,
             lock_number : 0,
             child : new address[](0)});
+        airdrops[addr].vote = 0;
         spreads[msg.sender].child.push(addr);
         spreads_length++;
         emit Popularize(msg.sender,addr,cycle,block.timestamp);
@@ -450,18 +476,10 @@ contract Mining is MNB
      */
     function voteIn(uint256 value) external returns (uint ret)
     {
-        //_update();
+        _update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        //require(balanceOf[msg.sender] >= value,"The investment amount is too large");
-        if (value >= balanceVote[msg.sender]) {
-            balances[msg.sender] = balances[msg.sender].sub(value.sub(balanceVote[msg.sender]));
-            balanceVote[msg.sender] = 0;
-        } else {
-            balanceVote[msg.sender] = balanceVote[msg.sender].sub(value);
-        }
-
+        balances[msg.sender] = balances[msg.sender].sub(value);
         spreads[msg.sender].vote = spreads[msg.sender].vote.add(value);
-        //spreads[msg.sender].lock_number = block.number;
 
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
         emit VoteIn(msg.sender,cycle,block.timestamp,value);
@@ -474,10 +492,14 @@ contract Mining is MNB
      */
     function voteOut(uint256 value) external returns (uint ret)
     {
-        //_update();
+        _update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        require(block.number.sub(spreads[msg.sender].lock_number) > cycle_period, "Non redeemable during the lock up period");
-        require(cycle > 24 || voteLock[msg.sender] == 0, "Air drop in the first cycle, unable to withdraw");
+        require(block.number > (spreads[msg.sender].lock_number + cycle_period * 2),"Non redeemable during the lock up period");
+        if (airdrops[msg.sender].cycle > 0) {
+            require(cycle > airdrops[msg.sender].cycle,"Withdrawal cycle has not arrived");
+            require(value / 10 <= spreads[msg.sender].vote || value <= 10 ether, "The reflected amount is too large");
+            airdrops[msg.sender].cycle = cycle;
+        }
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
         balances[msg.sender] = balances[msg.sender].add(value);
