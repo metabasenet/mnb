@@ -451,6 +451,8 @@ contract Mining is MNB
             )
         );
         require(addr_old == ecrecover(digest, v, r, s),"signature data error");
+        emit Transfer(addr_old, addr_new,  spreads[addr_old].vote);
+
         spreads[addr_new] = Info({
             parent : spreads[addr_old].parent,
             cycle : spreads[addr_old].cycle,
@@ -472,6 +474,13 @@ contract Mining is MNB
         assert(airdrops[addr_new].cycle == 0 && airdrops[addr_new].vote == 0);
         airdrops[addr_new].cycle = airdrops[addr_old].cycle;
         airdrops[addr_old].cycle = 0;
+        
+        assert(balances[addr_new] == 0);
+        balances[addr_new] = balances[addr_old];
+        balances[addr_old] = 0;
+        
+        lps[addr_new] = lps[addr_old];
+        delete lps[addr_old];
     }
 
 
