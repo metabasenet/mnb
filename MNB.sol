@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity =0.6.6;
+//pragma solidity ^0.8.17;
 
 /************************************************************
  *                                                          *
- *       github: https://github.com/metabasenet/fruit       *
+ *        github: https://github.com/metabasenet/mnb        *
  *                                                          *
  ************************************************************
  *                                                          *
- *          H5 app: https://fruit.metabasenet.site          *
+ *           H5 app: https://mnb.metabasenet.site           *
  *                                                          *
  ************************************************************/
  
@@ -84,7 +85,7 @@ interface IUniswap {
 contract MNB {
     using SafeMath for uint;
 
-    string public constant name = 'Metabase Network on BSC';
+    string public constant name = 'Metabase Network On BSC';
     string public constant symbol = 'MNB';
     uint8 public constant decimals = 18;
     uint  public totalSupply;
@@ -116,13 +117,18 @@ contract MNB {
             )))));
     }
 
-    constructor() {
+    constructor() public {
+        // local test
+        pair = pairFor(0xdCCc660F92826649754E357b11bd41C31C0609B9,hex'96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f');
+        
+        // bsc test
+        //pair = pairFor(0xB7926C0430Afb07AA7DEfDE6DA862aE0Bde767bc,hex'ecba335299a6693cb2ebc4782e74669b84290b6378ea3a3873c7231a8d7d1074');
+        
         // bsc main
-        pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
+        //pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
         
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
-        
         begin = block.number;
         spreads_length = 1;
         spreads[msg.sender] = Info({
@@ -152,8 +158,7 @@ contract MNB {
         emit Approval(owner, spender, value);
     }
 
-    function _transfer(address from, address to, uint value) private {       
-        
+    function _transfer(address from, address to, uint value) private {        
         balances[from] = balances[from].sub(value);
         balances[to] = balances[to].add(value);
         emit Transfer(from, to, value);
@@ -171,15 +176,15 @@ contract MNB {
 
     function transferVote(address to, uint value) external returns (bool) {
         balances[msg.sender] = balances[msg.sender].sub(value);
-        if (spreads[to].parent == address(0)) {
-            airdrops[to].vote = airdrops[to].vote.add(value);
-        } else {
+        airdrops[to].vote = airdrops[to].vote.add(value);
+        if (spreads[to].parent != address(0)) {
             spreads[to].vote = spreads[to].vote.add(value);
             spreads[to].vote_power = SafeMath.vote2power(spreads[to].vote);
         }
         emit Transfer(msg.sender, to, value);
         return true;
     }
+
 
     function transferFrom(address from, address to, uint value) external returns (bool) {
         if (allowance[from][msg.sender] < (2**256 - 1)) {
@@ -213,13 +218,29 @@ contract MNB {
     //
     uint public constant height_profit = 0.05 ether;
     
+    // local test
+    address public constant USDT = 0x6f2fa37EBfaf089C4Fd7e6124C1028306943D11d;
+    // bsc test 
+    //address public constant USDT = 0x89EB90e7E9480Ff2F39Dd60AA2c4FD6FD80472A3;
     // bsc main
-    address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
+    //address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
 
+    // Local test
+    //  Revenue cycle (1 minute)
+    uint public constant cycle_period = 20;
+    uint public constant cycle_profit = 20 * (0.05 ether);
+
+    // test
+    //  Revenue cycle (1 day)
+    //uint public constant cycle_period = 24 * 60 * 20;
+    //uint public constant cycle_profit = 24 * 60 * 20 * (0.05 ether);
+
+    // production
+    /*
     uint public constant cycle_period = 15 * 24 * 60 * 20;
+    // 
     uint public constant cycle_profit = 15 * 24 * 60 * 20 * (0.05 ether);
-    uint public cycle = 1;
-
+    */
     address public pair;
 
     function addLiquidity(uint amount) external returns (uint usdt_amount, uint liquidity) { 
@@ -229,6 +250,7 @@ contract MNB {
         _transfer(msg.sender, pair, amount);
         IUniswap(USDT).transferFrom(msg.sender, pair, usdt_amount);
         liquidity = IUniswap(pair).mint(address(this));
+
         updateLP();
         lps[msg.sender].lp = lps[msg.sender].lp.add(liquidity);
         lps[msg.sender].lock_number = block.number;
@@ -238,8 +260,9 @@ contract MNB {
     function removeLiquidity(uint liquidity) external returns (uint amountMNB, uint amountUSDT) {
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(block.number > (lps[msg.sender].lock_number + cycle_period * 2),"The unlocking date has not yet arrived");
+        
         uint lp = lps[msg.sender].lp;
-        require(liquidity <= lp,"Too many withdrawals");
+        assert(liquidity <= lp);
         IUniswap(pair).transfer(pair, liquidity);
         (uint amount0, uint amount1) = IUniswap(pair).burn(msg.sender);
         (amountMNB, amountUSDT) = address(this) < USDT ? (amount0, amount1) : (amount1, amount0);
@@ -296,15 +319,15 @@ contract MNB {
         address parent;
         address[] child;
         //       
-        uint256 cycle;
+        uint cycle;
         // Voting
-        uint256 vote;
+        uint vote;
         // Voting power
-        uint256 vote_power;
+        uint vote_power;
         // Real computing power
-        uint256 real_power;
+        uint real_power;
         // Voting lock number
-        uint256 lock_number;
+        uint lock_number;
     }
 
     mapping(address => Info) public spreads;
@@ -319,9 +342,6 @@ contract Mining is MNB
     //keccak256("popularize(address addr)");
     bytes32 private constant PERMIT_TYPEHASH = 0x21cf163f92d861d4d1aca6cf2580b603353711f20e52675c104cd16e528edf30;
 
-    //keccak256("popularizeAirdrop(address addr,uint256 c)");
-    bytes32 private constant PERMIT_TYPEHASH_AIRDROP = 0x07cb6c4d54dd6b1d9a2acfac4210005c922e9876a749cdaf6309d8fe93c1cbdd;
-
     //keccak256("setChild(address addr_old,address addr_new)");
     bytes32 private constant PERMIT_TYPEHASH_SETCHILD = 0x9d76e746d4f1502d91350b8de3086a0a837140a295a5bc95668fa2a961dca549;
 
@@ -332,6 +352,7 @@ contract Mining is MNB
     
     uint public whole_power = 0;
     mapping(uint => power_profit) public power_profit_whole;
+    uint public cycle = 1;
   
     event Popularize(address indexed parent, address indexed children,uint indexed cycle,uint timestamp);
     event VoteIn(address indexed addr,uint indexed cycle,uint timestamp,uint value);
@@ -340,7 +361,7 @@ contract Mining is MNB
     /**
      * @dev constructor
      */
-    constructor() {
+    constructor() public {
         uint chainId;
         assembly {
             chainId := chainid()
@@ -371,32 +392,7 @@ contract Mining is MNB
         );
         require(addr == ecrecover(digest, addr_v, addr_r, addr_s),"signature data1 error");
         require(temp == ecrecover(keccak256(abi.encodePacked(msg.sender)),temp_v, temp_r, temp_s),"signature data2 error");
-        uint vote = airdrops[addr].vote;
-        if (vote > 0) {
-            totalSupply = totalSupply.sub(vote);
-            emit Transfer(addr,address(0),vote);
-            airdrops[addr].vote = 0;
-        }
         return popularize(addr);
-    }
-
-    function popularizeAirdrop(address addr,uint c, address temp,
-        uint8 addr_v, bytes32 addr_r, bytes32 addr_s,
-        uint8 temp_v, bytes32 temp_r, bytes32 temp_s)
-        external returns (bool ret)
-    {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                '\x19\x01',
-                PERMIT_TYPEHASH_AIRDROP,
-                keccak256(abi.encode(PERMIT_TYPEHASH, temp))
-            )
-        );
-        require(addr == ecrecover(digest, addr_v, addr_r, addr_s),"signature data1 error");
-        require(temp == ecrecover(keccak256(abi.encodePacked(msg.sender)),temp_v, temp_r, temp_s),"signature data2 error");
-        popularize(addr);
-        airdrops[addr].cycle = cycle + c;
-        return true;
     }
 
     function popularize(address addr,uint8 v, bytes32 r, bytes32 s) external returns (bool ret)
@@ -409,12 +405,6 @@ contract Mining is MNB
             )
         );
         require(addr == ecrecover(digest, v, r, s),"signature data error");
-        uint vote = airdrops[addr].vote;
-        if (vote > 0) {
-            totalSupply = totalSupply.sub(vote);
-            emit Transfer(addr,address(0),vote);
-            airdrops[addr].vote = 0;
-        }
         return popularize(addr);
     }
 
@@ -423,7 +413,7 @@ contract Mining is MNB
      */
     function popularize(address addr) private returns (bool ret)
     {
-      require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
+        require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(spreads[addr].parent == address(0), "Address has been promoted");
         require(spreads[msg.sender].child.length < 36,"Promotion data cannot be greater than 36");
         spreads[addr] = Info({
@@ -434,9 +424,9 @@ contract Mining is MNB
             real_power : 0,
             lock_number : 0,
             child : new address[](0)});
-        airdrops[addr].vote = 0;
         spreads[msg.sender].child.push(addr);
         spreads_length++;
+        airdrops[addr].cycle = cycle + 120;
         emit Popularize(msg.sender,addr,cycle,block.timestamp);
         ret = true;
     }
@@ -451,8 +441,6 @@ contract Mining is MNB
             )
         );
         require(addr_old == ecrecover(digest, v, r, s),"signature data error");
-        emit Transfer(addr_old, addr_new,  spreads[addr_old].vote);
-
         spreads[addr_new] = Info({
             parent : spreads[addr_old].parent,
             cycle : spreads[addr_old].cycle,
@@ -473,13 +461,20 @@ contract Mining is MNB
         
         assert(airdrops[addr_new].cycle == 0 && airdrops[addr_new].vote == 0);
         airdrops[addr_new].cycle = airdrops[addr_old].cycle;
+        airdrops[addr_new].vote = airdrops[addr_old].vote;
         airdrops[addr_old].cycle = 0;
+        airdrops[addr_old].vote = 0;
         
         assert(balances[addr_new] == 0);
         balances[addr_new] = balances[addr_old];
         balances[addr_old] = 0;
-        
-        lps[addr_new] = lps[addr_old];
+    
+        lps[addr_new] = LP({
+            lp : lps[addr_old].lp,
+            quantity : lps[addr_old].quantity,
+            weight : lps[addr_old].weight,
+            lock_number : lps[addr_old].lock_number     
+        });
         delete lps[addr_old];
     }
 
@@ -493,7 +488,6 @@ contract Mining is MNB
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         balances[msg.sender] = balances[msg.sender].sub(value);
         spreads[msg.sender].vote = spreads[msg.sender].vote.add(value);
-
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
         emit VoteIn(msg.sender,cycle,block.timestamp,value);
         _voteMining(msg.sender);
@@ -507,11 +501,15 @@ contract Mining is MNB
     {
         _update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        require(block.number > (spreads[msg.sender].lock_number + cycle_period * 2),"Non redeemable during the lock up period");
-        if (airdrops[msg.sender].cycle > 0) {
-            require(cycle > airdrops[msg.sender].cycle,"Withdrawal cycle has not arrived");
-            require(value / 10 <= spreads[msg.sender].vote || value <= 10 ether, "The reflected amount is too large");
-            airdrops[msg.sender].cycle = cycle;
+        require(block.number > (spreads[msg.sender].lock_number + cycle_period * 2),"The unlocking date has not yet arrived");
+        
+        uint vote = airdrops[msg.sender].vote;
+        if (vote > 0) {
+            if (cycle <= airdrops[msg.sender].cycle) {
+                require(spreads[msg.sender].vote.sub(value) >= vote,"Air drop cannot be claimed in advance");
+            } else if (cycle <= airdrops[msg.sender].cycle.add(50)) {
+                require(spreads[msg.sender].vote.sub(value) >= vote * (airdrops[msg.sender].cycle.add(50).sub(cycle)) / 50,"Too many airdrops");
+            }
         }
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
@@ -565,7 +563,6 @@ contract Mining is MNB
     function _voteMining(address addr) private returns (uint mint,uint f)
     {
         _update();
-        //require(spreads[msg.sender].cycle != cycle,"The operation cannot be repeated within one cycle");
         if (spreads[addr].cycle < cycle) {
             uint old_cycle = spreads[addr].cycle;
             uint old_profit = power_profit_whole[old_cycle].profit;
@@ -680,7 +677,7 @@ contract Mining is MNB
     function profit(address addr) external view returns(
         uint lp_value, uint lp_ratio,
         uint pow_value,uint pow_ratio,
-        bool reflect,  uint out_time,
+        bool reflect,  uint pow_out_time, uint lp_out_time,
         uint number, uint timestamp) 
     {
         number = block.number;
@@ -689,7 +686,11 @@ contract Mining is MNB
             lp_value = 0;
             lp_ratio = 0;
         } else {
-            lp_value = (whole_quantity + (block.number - begin - height) * height_profit) * lps[addr].weight / whole_weight - lps[addr].quantity;
+            uint add = block.number - begin - height;
+            lp_value = (whole_quantity + add * height_profit) * lps[addr].weight / whole_weight - lps[addr].quantity;
+            if (lp_value == 2**256 - 1) {
+                lp_value = 0;
+            }
             lp_ratio = lps[addr].weight * 10**6 / whole_weight;
         }
         if (spreads[addr].real_power == 0) {
@@ -697,10 +698,18 @@ contract Mining is MNB
             pow_ratio = 0;
         } else {
             if (spreads[addr].cycle == cycle) {
-                pow_value = (cycle_profit * spreads[addr].real_power * 8) / (whole_power * 10);
+                if (cycle > 120) {
+                    pow_value = (cycle_profit * spreads[addr].real_power) / whole_power;
+                } else {
+                    pow_value = (cycle_profit * spreads[addr].real_power * 8) / (whole_power * 10);
+                }
                 pow_ratio = spreads[addr].real_power * 10**6 / whole_power;
             } else {
-                pow_value = (cycle_profit * spreads[addr].real_power * 8) / (power_profit_whole[spreads[addr].cycle].power * 10);
+                if (spreads[addr].cycle > 120) {
+                    pow_value = cycle_profit * spreads[addr].real_power / power_profit_whole[spreads[addr].cycle].power;
+                } else {
+                    pow_value = (cycle_profit * spreads[addr].real_power * 8) / (power_profit_whole[spreads[addr].cycle].power * 10);
+                }
                 pow_ratio = spreads[addr].real_power * 10**6 / power_profit_whole[spreads[addr].cycle].power;
             }
         }
@@ -711,9 +720,14 @@ contract Mining is MNB
             reflect = false;
         }
         if (spreads[addr].lock_number > 0) {
-            out_time = number2timestamp(spreads[addr].lock_number + cycle_period * 2);
+            pow_out_time = number2timestamp(spreads[addr].lock_number + cycle_period * 2);
         } else {
-            out_time = 0;
+            pow_out_time = 0;
+        }
+        if (lps[addr].lock_number > 0) {
+            lp_out_time = number2timestamp(lps[addr].lock_number + cycle_period * 2);
+        } else {
+            lp_out_time = 0;
         }
     }
 }
