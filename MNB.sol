@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.6.6;
-//pragma solidity ^0.8.17;
+pragma solidity ^0.8.17;
 
 /************************************************************
  *                                                          *
@@ -117,15 +116,9 @@ contract MNB {
             )))));
     }
 
-    constructor() public {
-        // local test
-        pair = pairFor(0xdCCc660F92826649754E357b11bd41C31C0609B9,hex'96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f');
+    constructor() {
         
-        // bsc test
-        //pair = pairFor(0xB7926C0430Afb07AA7DEfDE6DA862aE0Bde767bc,hex'ecba335299a6693cb2ebc4782e74669b84290b6378ea3a3873c7231a8d7d1074');
-        
-        // bsc main
-        //pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
+        pair = pairFor(0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73,hex'00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5');
         
         uint _totalSupply = 1000_000 ether;
         _mint(msg.sender, _totalSupply);
@@ -217,30 +210,13 @@ contract MNB {
     uint public height = 0;
     //
     uint public constant height_profit = 0.05 ether;
-    
-    // local test
-    address public constant USDT = 0x6f2fa37EBfaf089C4Fd7e6124C1028306943D11d;
-    // bsc test 
-    //address public constant USDT = 0x89EB90e7E9480Ff2F39Dd60AA2c4FD6FD80472A3;
-    // bsc main
-    //address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
+    // 
+    address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
 
-    // Local test
-    //  Revenue cycle (1 minute)
-    uint public constant cycle_period = 20;
-    uint public constant cycle_profit = 20 * (0.05 ether);
-
-    // test
-    //  Revenue cycle (1 day)
-    //uint public constant cycle_period = 24 * 60 * 20;
-    //uint public constant cycle_profit = 24 * 60 * 20 * (0.05 ether);
-
-    // production
-    /*
     uint public constant cycle_period = 15 * 24 * 60 * 20;
     // 
     uint public constant cycle_profit = 15 * 24 * 60 * 20 * (0.05 ether);
-    */
+    
     address public pair;
 
     function addLiquidity(uint amount) external returns (uint usdt_amount, uint liquidity) { 
@@ -361,7 +337,7 @@ contract Mining is MNB
     /**
      * @dev constructor
      */
-    constructor() public {
+    constructor() {
         uint chainId;
         assembly {
             chainId := chainid()
