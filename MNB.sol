@@ -89,16 +89,16 @@ contract MNB {
     uint8 public constant decimals = 18;
     uint  public totalSupply;
 
-    mapping(address => uint) public balances;
+    mapping(address => uint) private balances;
     mapping(address => Airdrop) public airdrops;
 
     function balanceOf(address owner) external view returns(uint ret) {
         ret = balances[owner];
-        if (spreads[owner].parent == address(0)) {
-            ret = ret.add(airdrops[owner].vote); 
-        } else {
-            ret = ret.add(spreads[owner].vote);
-        }
+        //if (spreads[owner].parent == address(0)) {
+        //    ret = ret.add(airdrops[owner].vote); 
+        //}else {
+        //    ret = ret.add(spreads[owner].vote);
+        //}
     }
 
     mapping(address => mapping(address => uint)) public allowance;
@@ -132,6 +132,7 @@ contract MNB {
             real_power : 0,
             lock_number : 0,
             child : new address[](0)});
+        airdrops[msg.sender].cycle = 121;
     }
 
     function _mint(address to, uint value) internal {
@@ -444,7 +445,8 @@ contract Mining is MNB
         assert(balances[addr_new] == 0);
         balances[addr_new] = balances[addr_old];
         balances[addr_old] = 0;
-    
+        emit Transfer(addr_old, addr_new, balances[addr_new]);
+
         lps[addr_new] = LP({
             lp : lps[addr_old].lp,
             quantity : lps[addr_old].quantity,
