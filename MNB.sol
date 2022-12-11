@@ -88,17 +88,17 @@ contract MNB {
     string public constant symbol = 'MNB';
     uint8 public constant decimals = 18;
     uint  public totalSupply;
+    uint  internal totalVote;
 
-    mapping(address => uint) private balances;
+    mapping(address => uint) internal balances;
     mapping(address => Airdrop) public airdrops;
 
     function balanceOf(address owner) external view returns(uint ret) {
-        ret = balances[owner];
-        //if (spreads[owner].parent == address(0)) {
-        //    ret = ret.add(airdrops[owner].vote); 
-        //}else {
-        //    ret = ret.add(spreads[owner].vote);
-        //}
+        if (owner == address(this)) {
+            ret = totalVote;
+        } else {
+            ret = balances[owner];
+        }
     }
 
     mapping(address => mapping(address => uint)) public allowance;
@@ -141,12 +141,6 @@ contract MNB {
         emit Transfer(address(0), to, value);
     }
 
-    function _burn(address from, uint value) internal {
-        balances[from] = balances[from].sub(value);
-        totalSupply = totalSupply.sub(value);
-        emit Transfer(from, address(0), value);
-    }
-
     function _approve(address owner, address spender, uint value) private {
         allowance[owner][spender] = value;
         emit Approval(owner, spender, value);
@@ -175,7 +169,8 @@ contract MNB {
             spreads[to].vote = spreads[to].vote.add(value);
             spreads[to].vote_power = SafeMath.vote2power(spreads[to].vote);
         }
-        emit Transfer(msg.sender, to, value);
+        totalVote = totalVote.add(value);
+        emit Transfer(msg.sender, address(this), value);
         return true;
     }
 
@@ -332,8 +327,6 @@ contract Mining is MNB
     uint public cycle = 1;
   
     event Popularize(address indexed parent, address indexed children,uint indexed cycle,uint timestamp);
-    event VoteIn(address indexed addr,uint indexed cycle,uint timestamp,uint value);
-    event VoteOut(address indexed addr,uint indexed cycle,uint timestamp,uint value);
     
     /**
      * @dev constructor
@@ -467,8 +460,10 @@ contract Mining is MNB
         balances[msg.sender] = balances[msg.sender].sub(value);
         spreads[msg.sender].vote = spreads[msg.sender].vote.add(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
-        emit VoteIn(msg.sender,cycle,block.timestamp,value);
         _voteMining(msg.sender);
+
+        totalVote = totalVote.add(value);
+        emit Transfer(msg.sender, address(this), value);
         ret = value;
     }
 
@@ -492,7 +487,9 @@ contract Mining is MNB
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
         balances[msg.sender] = balances[msg.sender].add(value);
-        emit VoteOut(msg.sender,cycle,block.timestamp,value);
+        
+        totalVote = totalVote.sub(value);
+        emit Transfer(address(this),msg.sender,value);
         ret = value;
     }
 
