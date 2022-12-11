@@ -88,23 +88,12 @@ contract MNB {
     string public constant symbol = 'MNB';
     uint8 public constant decimals = 18;
     uint  public totalSupply;
-
-    mapping(address => uint) private balances;
-    mapping(address => Airdrop) public airdrops;
-
-    function balanceOf(address owner) external view returns(uint ret) {
-        ret = balances[owner];
-        //if (spreads[owner].parent == address(0)) {
-        //    ret = ret.add(airdrops[owner].vote); 
-        //}else {
-        //    ret = ret.add(spreads[owner].vote);
-        //}
-    }
-
+    mapping(address => uint) public balanceOf;
     mapping(address => mapping(address => uint)) public allowance;
-
     event Approval(address indexed owner, address indexed spender, uint value);
     event Transfer(address indexed from, address indexed to, uint value);
+
+    mapping(address => Airdrop) public airdropOf;
 
     function pairFor(address factory,bytes memory code_hash) private view returns (address addr) {
         (address token0, address token1) = address(this) < USDT ? (address(this),USDT) : (USDT,address(this));
@@ -132,19 +121,13 @@ contract MNB {
             real_power : 0,
             lock_number : 0,
             child : new address[](0)});
-        airdrops[msg.sender].cycle = 121;
+        airdropOf[msg.sender].cycle = 121;
     }
 
     function _mint(address to, uint value) internal {
         totalSupply = totalSupply.add(value);
-        balances[to] = balances[to].add(value);
+        balanceOf[to] = balanceOf[to].add(value);
         emit Transfer(address(0), to, value);
-    }
-
-    function _burn(address from, uint value) internal {
-        balances[from] = balances[from].sub(value);
-        totalSupply = totalSupply.sub(value);
-        emit Transfer(from, address(0), value);
     }
 
     function _approve(address owner, address spender, uint value) private {
@@ -153,8 +136,8 @@ contract MNB {
     }
 
     function _transfer(address from, address to, uint value) private {        
-        balances[from] = balances[from].sub(value);
-        balances[to] = balances[to].add(value);
+        balanceOf[from] = balanceOf[from].sub(value);
+        balanceOf[to] = balanceOf[to].add(value);
         emit Transfer(from, to, value);
     }
 
@@ -164,23 +147,25 @@ contract MNB {
     }
 
     function transfer(address to, uint value) external returns (bool) {
+        assert(to != address(this));
         _transfer(msg.sender, to, value);
         return true;
     }
 
     function transferVote(address to, uint value) external returns (bool) {
-        balances[msg.sender] = balances[msg.sender].sub(value);
-        airdrops[to].vote = airdrops[to].vote.add(value);
+        balanceOf[msg.sender] = balanceOf[msg.sender].sub(value);
+        airdropOf[to].vote = airdropOf[to].vote.add(value);
         if (spreads[to].parent != address(0)) {
             spreads[to].vote = spreads[to].vote.add(value);
             spreads[to].vote_power = SafeMath.vote2power(spreads[to].vote);
         }
-        emit Transfer(msg.sender, to, value);
+        balanceOf[address(this)] = balanceOf[address(this)].add(value);
+        emit Transfer(msg.sender, address(this), value);
         return true;
     }
 
-
     function transferFrom(address from, address to, uint value) external returns (bool) {
+        assert(to != address(this));
         if (allowance[from][msg.sender] < (2**256 - 1)) {
             allowance[from][msg.sender] = allowance[from][msg.sender].sub(value);
         }
@@ -332,8 +317,6 @@ contract Mining is MNB
     uint public cycle = 1;
   
     event Popularize(address indexed parent, address indexed children,uint indexed cycle,uint timestamp);
-    event VoteIn(address indexed addr,uint indexed cycle,uint timestamp,uint value);
-    event VoteOut(address indexed addr,uint indexed cycle,uint timestamp,uint value);
     
     /**
      * @dev constructor
@@ -396,14 +379,14 @@ contract Mining is MNB
         spreads[addr] = Info({
             parent : msg.sender,
             cycle : cycle,
-            vote : airdrops[addr].vote,
-            vote_power : SafeMath.vote2power(airdrops[addr].vote),
+            vote : airdropOf[addr].vote,
+            vote_power : SafeMath.vote2power(airdropOf[addr].vote),
             real_power : 0,
             lock_number : 0,
             child : new address[](0)});
         spreads[msg.sender].child.push(addr);
         spreads_length++;
-        airdrops[addr].cycle = cycle + 120;
+        airdropOf[addr].cycle = cycle + 120;
         emit Popularize(msg.sender,addr,cycle,block.timestamp);
         ret = true;
     }
@@ -436,16 +419,16 @@ contract Mining is MNB
         }
         delete spreads[addr_old];
         
-        assert(airdrops[addr_new].cycle == 0 && airdrops[addr_new].vote == 0);
-        airdrops[addr_new].cycle = airdrops[addr_old].cycle;
-        airdrops[addr_new].vote = airdrops[addr_old].vote;
-        airdrops[addr_old].cycle = 0;
-        airdrops[addr_old].vote = 0;
+        assert(airdropOf[addr_new].cycle == 0 && airdropOf[addr_new].vote == 0);
+        airdropOf[addr_new].cycle = airdropOf[addr_old].cycle;
+        airdropOf[addr_new].vote = airdropOf[addr_old].vote;
+        airdropOf[addr_old].cycle = 0;
+        airdropOf[addr_old].vote = 0;
         
-        assert(balances[addr_new] == 0);
-        balances[addr_new] = balances[addr_old];
-        balances[addr_old] = 0;
-        emit Transfer(addr_old, addr_new, balances[addr_new]);
+        assert(balanceOf[addr_new] == 0);
+        balanceOf[addr_new] = balanceOf[addr_old];
+        balanceOf[addr_old] = 0;
+        emit Transfer(addr_old, addr_new, balanceOf[addr_new]);
 
         lps[addr_new] = LP({
             lp : lps[addr_old].lp,
@@ -464,11 +447,13 @@ contract Mining is MNB
     {
         _update();
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
-        balances[msg.sender] = balances[msg.sender].sub(value);
+        balanceOf[msg.sender] = balanceOf[msg.sender].sub(value);
         spreads[msg.sender].vote = spreads[msg.sender].vote.add(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
-        emit VoteIn(msg.sender,cycle,block.timestamp,value);
         _voteMining(msg.sender);
+
+        balanceOf[address(this)] = balanceOf[address(this)].add(value);
+        emit Transfer(msg.sender, address(this), value);
         ret = value;
     }
 
@@ -481,18 +466,20 @@ contract Mining is MNB
         require(spreads[msg.sender].parent != address(0), "Parent address is not a generalization set");
         require(block.number > (spreads[msg.sender].lock_number + cycle_period * 2),"The unlocking date has not yet arrived");
         
-        uint vote = airdrops[msg.sender].vote;
+        uint vote = airdropOf[msg.sender].vote;
         if (vote > 0) {
-            if (cycle <= airdrops[msg.sender].cycle) {
+            if (cycle <= airdropOf[msg.sender].cycle) {
                 require(spreads[msg.sender].vote.sub(value) >= vote,"Air drop cannot be claimed in advance");
-            } else if (cycle <= airdrops[msg.sender].cycle.add(50)) {
-                require(spreads[msg.sender].vote.sub(value) >= vote * (airdrops[msg.sender].cycle.add(50).sub(cycle)) / 50,"Too many airdrops");
+            } else if (cycle <= airdropOf[msg.sender].cycle.add(50)) {
+                require(spreads[msg.sender].vote.sub(value) >= vote * (airdropOf[msg.sender].cycle.add(50).sub(cycle)) / 50,"Too many airdrops");
             }
         }
         spreads[msg.sender].vote = spreads[msg.sender].vote.sub(value);
         spreads[msg.sender].vote_power = SafeMath.vote2power(spreads[msg.sender].vote);
-        balances[msg.sender] = balances[msg.sender].add(value);
-        emit VoteOut(msg.sender,cycle,block.timestamp,value);
+        balanceOf[msg.sender] = balanceOf[msg.sender].add(value);
+
+        balanceOf[address(this)] = balanceOf[address(this)].sub(value);
+        emit Transfer(address(this),msg.sender,value);
         ret = value;
     }
 
